@@ -1,10 +1,5 @@
 "use client";
 
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import {
-  useChatRuntime,
-  AssistantChatTransport,
-} from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import {
   SidebarInset,
@@ -21,12 +16,19 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
 
 export const Assistant = () => {
-  const runtime = useChatRuntime({
+  /*  const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
       api: "/api/chat",
     }),
+  });
+ */
+  const runtime = useDataStreamRuntime({
+    api: "/api/chat",
+    onError: (err) => console.error("Runtime error:", err),
   });
 
   return (
@@ -57,7 +59,9 @@ export const Assistant = () => {
               </Breadcrumb>
             </header>
             <div className="flex-1 overflow-hidden">
+              {/*<AssistantRuntimeProvider runtime={runtime}>*/}
               <Thread />
+              {/*</AssistantRuntimeProvider>*/}
             </div>
           </SidebarInset>
         </div>

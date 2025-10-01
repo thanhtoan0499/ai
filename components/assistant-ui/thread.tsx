@@ -5,6 +5,8 @@ import {
   ErrorPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useMessage,
+  useThread,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -22,17 +24,17 @@ import type { FC } from "react";
 import {
   ComposerAddAttachment,
   ComposerAttachments,
-  UserMessageAttachments,
 } from "@/components/assistant-ui/attachment";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { LazyMotion, MotionConfig, domAnimation } from "motion/react";
+import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import * as m from "motion/react-m";
 
 export const Thread: FC = () => {
+  const threads = useThread();
   return (
     <LazyMotion features={domAnimation}>
       <MotionConfig reducedMotion="user">
@@ -289,13 +291,14 @@ const AssistantActionBar: FC = () => {
 };
 
 const UserMessage: FC = () => {
+  const message = useMessage();
   return (
     <MessagePrimitive.Root asChild>
       <div
         className="aui-user-message-root mx-auto grid w-full max-w-[var(--thread-max-width)] animate-in auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 px-2 py-4 duration-200 fade-in slide-in-from-bottom-1 first:mt-3 last:mb-5 [&:where(>*)]:col-start-2"
         data-role="user"
       >
-        <UserMessageAttachments />
+        {/*<UserMessageAttachments />*/}
 
         <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
           <div className="aui-user-message-content rounded-3xl bg-muted px-5 py-2.5 break-words text-foreground">
