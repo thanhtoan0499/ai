@@ -4,10 +4,10 @@ import {
   ThreadListPrimitive,
 } from "@assistant-ui/react";
 import { ArchiveIcon, PlusIcon } from "lucide-react";
+import { last } from "lodash";
 
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { useThreadContext } from "@/app/MyRuntimeProvider";
 import { ChatThread, useChatStore } from "@/app/chatStore";
 
 export const ThreadList: FC = () => {
@@ -20,15 +20,14 @@ export const ThreadList: FC = () => {
 };
 
 const ThreadListNew: FC = () => {
-  const { setSelectedThreadId, threads } = useChatStore();
-  const { addNewThread } = useThreadContext();
+  const { addNewThread, setSelectedThreadId, threads } = useChatStore();
   return (
     <ThreadListPrimitive.New asChild>
       <Button
         className="aui-thread-list-new flex items-center justify-start gap-1 rounded-lg px-2.5 py-2 text-start hover:bg-muted data-active:bg-muted"
         variant="ghost"
         onClick={() => {
-          if (threads?.some((ele) => !ele?.messages?.length)) return;
+          if (last(threads)?.messages?.length === 0) return;
           const newThreadName = `Thread ${threads.length + 1}`;
           addNewThread(newThreadName);
           const newThread = threads.find((t) => t.name === newThreadName);

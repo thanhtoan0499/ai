@@ -1,7 +1,13 @@
 "use client";
-import { create, StateCreator } from "zustand";
+import { create } from "zustand";
 import type { ThreadMessageLike } from "@assistant-ui/react";
 import { createJSONStorage, persist } from "zustand/middleware";
+
+export type ChatThread = {
+  id: string;
+  name: string;
+  messages: ThreadMessageLike[];
+};
 
 interface ChatState {
   isRunning: boolean;
@@ -10,33 +16,33 @@ interface ChatState {
   setThreads: (threads: ChatThread[]) => void;
   setSelectedThreadId: (id: string) => void;
   selectedThreadId: string;
+  addNewThread: (name: string) => void;
 }
 
-export type ChatThread = {
-  id: string;
-  name: string;
-  messages: ThreadMessageLike[];
-};
-
-export const useChatStore = create<ChatState>(
+export const useChatStore = create<ChatState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       isRunning: false,
       setIsRunning: (val: boolean) => set({ isRunning: val }),
-      threads: [
-        {
-          id: "thread-1",
-          name: "Thread 1",
-          messages: [],
-        },
-      ],
-      setThreads: (threads: ChatThread[]) => set({ threads }),
-      setSelectedThreadId: (id: string) => set({ selectedThreadId: id }),
+      threads: [],
+      setThreads: (threads) => set({ threads }),
       selectedThreadId: "thread-1",
+      setSelectedThreadId: (id) => set({ selectedThreadId: id }),
+      addNewThread: (name) => {
+        const newThread = {
+          id: `thread-${Date.now()}`,
+          name,
+          messages: [],
+        };
+        set({
+          threads: [...get().threads, newThread],
+          selectedThreadId: newThread.id,
+        });
+      },
     }),
     {
       name: "chat-store",
       storage: createJSONStorage(() => localStorage),
     },
-  ) as unknown as StateCreator<ChatState>,
+  ),
 );

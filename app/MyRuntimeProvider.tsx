@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext } from "react";
-import { ChatThread, useChatStore } from "@/app/chatStore";
+import React, { useEffect } from "react";
+import { useChatStore } from "@/app/chatStore";
 import {
   AppendMessage,
   AssistantRuntimeProvider,
@@ -9,19 +9,6 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { DevToolsModal } from "@assistant-ui/react-devtools";
-
-// Add context for thread actions
-type ThreadContextType = {
-  addNewThread: (name: string) => void;
-};
-const ThreadContext = createContext<ThreadContextType | undefined>(undefined);
-
-export function useThreadContext() {
-  const ctx = useContext(ThreadContext);
-  if (!ctx)
-    throw new Error("useThreadContext must be used within MyRuntimeProvider");
-  return ctx;
-}
 
 export function MyRuntimeProvider({
   children,
@@ -32,7 +19,7 @@ export function MyRuntimeProvider({
     threads,
     setThreads,
     selectedThreadId,
-    setSelectedThreadId,
+    addNewThread,
   } = useChatStore();
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId)!;
@@ -57,7 +44,6 @@ export function MyRuntimeProvider({
     setIsRunning(true);
 
     try {
-      // fake API call
       const fakeFetch = () =>
         new Promise((resolve) => {
           setTimeout(() => {
@@ -92,7 +78,7 @@ export function MyRuntimeProvider({
   };
 
   const runtime = useExternalStoreRuntime({
-    messages: selectedThread.messages,
+    messages: selectedThread?.messages ?? [],
     setMessages: (msgs: readonly ThreadMessageLike[]) =>
       setThreadMessages([...(msgs ?? [])]),
     isRunning,
@@ -105,26 +91,17 @@ export function MyRuntimeProvider({
     },
   });
 
-  const addNewThread = (name: string) => {
-    const newThread: ChatThread = {
-      id: `thread-${Date.now()}`,
-      name,
-      messages: [],
-    };
-    setThreads([...threads, newThread]);
-    setSelectedThreadId(newThread.id);
-  };
+  useEffect(() => {
+    const data = localStorage.getItem("chat-store");
+    if (threads.length > 0 || data) return;
+    const newThreadName = `Thread ${threads.length + 1}`;
+    addNewThread(newThreadName);
+  }, []);
 
   return (
-    <ThreadContext.Provider
-      value={{
-        addNewThread,
-      }}
-    >
-      <AssistantRuntimeProvider runtime={runtime}>
-        <DevToolsModal />
-        {children}
-      </AssistantRuntimeProvider>
-    </ThreadContext.Provider>
+    <AssistantRuntimeProvider runtime={runtime}>
+      <DevToolsModal />
+      {children}
+    </AssistantRuntimeProvider>
   );
 }

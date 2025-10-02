@@ -4,18 +4,34 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  // assistant-stream DataStream wire format requires lines like:
-  // `${type}:${JSON.stringify(value)}\n`
-  // where `type` is one of DataStreamStreamChunkType values
-  // Minimal flow: StartStep ('f') -> TextDelta ('0')* -> FinishStep ('e') -> FinishMessage ('d')
-
-  const messageId = "msg_00c28144627d502f0068dcca3df9a8819d93f0c38b3a730b44";
-  const deltas = ["Olá", "!", " Como", " posso", " ajudar", " você", " hoje", "?"];
+  const messageId = "123123123";
+  const deltas = [
+    "Gets",
+    " the",
+    " element",
+    " at",
+    " index",
+    " n",
+    " of",
+    " array.",
+    " If",
+    " n",
+    " is",
+    " negative,",
+    " the",
+    " nth",
+    " element",
+    " from",
+    " the",
+    " end",
+    " is",
+    " returned.",
+  ];
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
-      const send = (type: string, value: any) => {
+      const send = (type: string, value) => {
         const line = `${type}:${JSON.stringify(value)}\n`;
         controller.enqueue(encoder.encode(line));
       };

@@ -1,12 +1,12 @@
 import {
   ActionBarPrimitive,
+  AssistantRuntimeProvider,
   BranchPickerPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
+  ThreadMessageLike,
   ThreadPrimitive,
-  useMessage,
-  useThread,
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -19,49 +19,83 @@ import {
   RefreshCwIcon,
   Square,
 } from "lucide-react";
-import type { FC } from "react";
+import React, { FC, useState } from "react";
 
 import {
   ComposerAddAttachment,
   ComposerAttachments,
 } from "@/components/assistant-ui/attachment";
-import { MarkdownText } from "@/components/assistant-ui/markdown-text";
-import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import * as m from "motion/react-m";
+import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
+import { ChatThread, useChatStore } from "@/app/chatStore";
 
 export const Thread: FC = () => {
-  const threads = useThread();
-  return (
-    <LazyMotion features={domAnimation}>
-      <MotionConfig reducedMotion="user">
-        <ThreadPrimitive.Root
-          className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
-          style={{
-            ["--thread-max-width" as string]: "44rem",
-          }}
-        >
-          <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
-            <ThreadWelcome />
+  const { threads, setThreads, selectedThreadId } = useChatStore();
+  const selectedThread = threads.find((t) => t.id === selectedThreadId);
+  const messages = selectedThread ? selectedThread.messages : [];
 
-            <ThreadPrimitive.Messages
-              components={{
-                UserMessage,
-                EditComposer,
-                AssistantMessage,
-              }}
-            />
-            <ThreadPrimitive.If empty={false}>
+  const runtime = useDataStreamRuntime({
+    api: "/api/chat",
+    onResponse: (res) => {
+      console.log("onResponse", res);
+    },
+    onFinish: (res) => {
+      const setThreadMessages = (msgs: ThreadMessageLike[]) => {
+        setThreads(
+          threads.map((t) =>
+            t.id === selectedThreadId ? { ...t, messages: msgs } : t,
+          ),
+        );
+      };
+      const assistantMsg: ThreadMessageLike = {
+        role: "assistant",
+        content: res?.content,
+        id: `assistant-${Date.now()}`,
+        createdAt: new Date(),
+      };
+      setThreadMessages([...messages, assistantMsg]);
+    },
+    onError: (err) => console.error("Runtime error:", err),
+  });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <LazyMotion features={domAnimation}>
+        <MotionConfig reducedMotion="user">
+          <ThreadPrimitive.Root
+            className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
+            style={{
+              ["--thread-max-width" as string]: "44rem",
+            }}
+          >
+            <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
+              {messages?.length === 0 && <ThreadWelcome />}
+              {messages.map((msg) => {
+                if (msg.role === "user") {
+                  return (
+                    <React.Fragment key={msg.id}>
+                      <UserMessage message={msg} />
+                      {/*<EditComposer />*/}
+                    </React.Fragment>
+                  );
+                }
+
+                if (msg.role === "assistant") {
+                  return <AssistantMessage key={msg.id} message={msg} />;
+                }
+                return null;
+              })}
               <div className="aui-thread-viewport-spacer min-h-8 grow" />
-            </ThreadPrimitive.If>
-            <Composer />
-          </ThreadPrimitive.Viewport>
-        </ThreadPrimitive.Root>
-      </MotionConfig>
-    </LazyMotion>
+              <Composer />
+            </ThreadPrimitive.Viewport>
+          </ThreadPrimitive.Root>
+        </MotionConfig>
+      </LazyMotion>
+    </AssistantRuntimeProvider>
   );
 };
 
@@ -81,31 +115,29 @@ const ThreadScrollToBottom: FC = () => {
 
 const ThreadWelcome: FC = () => {
   return (
-    <ThreadPrimitive.Empty>
-      <div className="aui-thread-welcome-root mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
-        <div className="aui-thread-welcome-center flex w-full flex-grow flex-col items-center justify-center">
-          <div className="aui-thread-welcome-message flex size-full flex-col justify-center px-8">
-            <m.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="aui-thread-welcome-message-motion-1 text-2xl font-semibold"
-            >
-              Hello there!
-            </m.div>
-            <m.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ delay: 0.1 }}
-              className="aui-thread-welcome-message-motion-2 text-2xl text-muted-foreground/65"
-            >
-              How can I help you today?
-            </m.div>
-          </div>
+    <div className="aui-thread-welcome-root mx-auto my-auto flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
+      <div className="aui-thread-welcome-center flex w-full flex-grow flex-col items-center justify-center">
+        <div className="aui-thread-welcome-message flex size-full flex-col justify-center px-8">
+          <m.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="aui-thread-welcome-message-motion-1 text-2xl font-semibold"
+          >
+            Hello there!
+          </m.div>
+          <m.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            transition={{ delay: 0.1 }}
+            className="aui-thread-welcome-message-motion-2 text-2xl text-muted-foreground/65"
+          >
+            How can I help you today?
+          </m.div>
         </div>
       </div>
-    </ThreadPrimitive.Empty>
+    </div>
   );
 };
 
@@ -142,12 +174,7 @@ const ThreadWelcomeSuggestions: FC = () => {
           key={`suggested-action-${suggestedAction.title}-${index}`}
           className="aui-thread-welcome-suggestion-display [&:nth-child(n+3)]:hidden @md:[&:nth-child(n+3)]:block"
         >
-          <ThreadPrimitive.Suggestion
-            prompt={suggestedAction.action}
-            method="replace"
-            autoSend
-            asChild
-          >
+          <ThreadPrimitive.Suggestion prompt={suggestedAction.action} asChild>
             <Button
               variant="ghost"
               className="aui-thread-welcome-suggestion h-auto w-full flex-1 flex-wrap items-start justify-start gap-1 rounded-3xl border px-5 py-4 text-left text-sm @md:flex-col dark:hover:bg-accent/60"
@@ -168,13 +195,19 @@ const ThreadWelcomeSuggestions: FC = () => {
 };
 
 const Composer: FC = () => {
+  const [value, setValue] = useState("");
+  const { threads, setThreads, selectedThreadId } = useChatStore();
+  const selectedThread = threads.find((t) => t.id === selectedThreadId);
   return (
     <div className="aui-composer-wrapper sticky bottom-0 mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-background pb-4 md:pb-6">
       <ThreadScrollToBottom />
-      <ThreadPrimitive.Empty>
-        <ThreadWelcomeSuggestions />
-      </ThreadPrimitive.Empty>
-      <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col rounded-3xl border border-border bg-muted px-1 pt-2 shadow-[0_9px_9px_0px_rgba(0,0,0,0.01),0_2px_5px_0px_rgba(0,0,0,0.06)] dark:border-muted-foreground/15">
+      {selectedThread?.messages?.length === 0 && <ThreadWelcomeSuggestions />}
+      <ComposerPrimitive.Root
+        className="aui-composer-root relative flex w-full flex-col rounded-3xl border border-border bg-muted px-1 pt-2 shadow-[0_9px_9px_0px_rgba(0,0,0,0.01),0_2px_5px_0px_rgba(0,0,0,0.06)] dark:border-muted-foreground/15"
+        onSubmit={() => {
+          getOnClick(value, threads, setThreads, selectedThreadId);
+        }}
+      >
         <ComposerAttachments />
         <ComposerPrimitive.Input
           placeholder="Send a message..."
@@ -182,32 +215,62 @@ const Composer: FC = () => {
           rows={1}
           autoFocus
           aria-label="Message input"
+          onChange={(e) => setValue(e.target.value)}
         />
-        <ComposerAction />
+        <ComposerAction keyword={value} />
       </ComposerPrimitive.Root>
     </div>
   );
 };
 
-const ComposerAction: FC = () => {
+const getOnClick = (
+  keyword: string,
+  threads: ChatThread[],
+  setThreads: (threads: ChatThread[]) => void,
+  selectedThreadId: string,
+) => {
+  const selectedThread = threads.find((t) => t.id === selectedThreadId);
+  const messages = selectedThread ? selectedThread.messages : [];
+  const setThreadMessages = (msgs: ThreadMessageLike[]) => {
+    setThreads(
+      threads.map((t) =>
+        t.id === selectedThreadId ? { ...t, messages: msgs } : t,
+      ),
+    );
+  };
+  const userMsg: ThreadMessageLike = {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: keyword,
+      },
+    ],
+    id: `user-${Date.now()}`,
+    createdAt: new Date(),
+  };
+  setThreadMessages([...messages, userMsg]);
+};
+
+const ComposerAction: FC<{ keyword: string }> = ({ keyword }) => {
   return (
     <div className="aui-composer-action-wrapper relative mx-1 mt-2 mb-2 flex items-center justify-between">
       <ComposerAddAttachment />
 
       <ThreadPrimitive.If running={false}>
-        <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip="Send message"
-            side="bottom"
-            type="submit"
-            variant="default"
-            size="icon"
-            className="aui-composer-send size-[34px] rounded-full p-1"
-            aria-label="Send message"
-          >
-            <ArrowUpIcon className="aui-composer-send-icon size-5" />
-          </TooltipIconButton>
-        </ComposerPrimitive.Send>
+        {/*<ComposerPrimitive.Send asChild>*/}
+        <TooltipIconButton
+          tooltip="Send message"
+          side="bottom"
+          // type="submit"
+          variant="default"
+          size="icon"
+          className="aui-composer-send size-[34px] rounded-full p-1"
+          aria-label="Send message"
+        >
+          <ArrowUpIcon className="aui-composer-send-icon size-5" />
+        </TooltipIconButton>
+        {/*</ComposerPrimitive.Send>*/}
       </ThreadPrimitive.If>
 
       <ThreadPrimitive.If running>
@@ -237,29 +300,27 @@ const MessageError: FC = () => {
   );
 };
 
-const AssistantMessage: FC = () => {
+const AssistantMessage: FC<{ message: ThreadMessageLike }> = ({ message }) => {
+  if (message?.role !== "assistant") return;
+  const firstContent = message?.content?.[0];
+  const text =
+    typeof firstContent === "object" && "text" in firstContent
+      ? firstContent.text
+      : "";
   return (
-    <MessagePrimitive.Root asChild>
-      <div
-        className="aui-assistant-message-root relative mx-auto w-full max-w-[var(--thread-max-width)] animate-in py-4 duration-200 fade-in slide-in-from-bottom-1 last:mb-24"
-        data-role="assistant"
-      >
-        <div className="aui-assistant-message-content mx-2 leading-7 break-words text-foreground">
-          <MessagePrimitive.Parts
-            components={{
-              Text: MarkdownText,
-              tools: { Fallback: ToolFallback },
-            }}
-          />
-          <MessageError />
-        </div>
-
-        <div className="aui-assistant-message-footer mt-2 ml-2 flex">
-          <BranchPicker />
-          <AssistantActionBar />
-        </div>
+    <div
+      className="aui-assistant-message-root relative mx-auto w-full max-w-[var(--thread-max-width)] animate-in py-4 duration-200 fade-in slide-in-from-bottom-1 last:mb-24"
+      data-role="assistant"
+    >
+      <div className="aui-assistant-message-content mx-2 leading-7 break-words text-foreground">
+        <p>{text}</p>
+        {/*<MessageError />*/}
       </div>
-    </MessagePrimitive.Root>
+      <div className="aui-assistant-message-footer mt-2 ml-2 flex">
+        {/*<BranchPicker />*/}
+        {/*<AssistantActionBar />*/}
+      </div>
+    </div>
   );
 };
 
@@ -290,28 +351,30 @@ const AssistantActionBar: FC = () => {
   );
 };
 
-const UserMessage: FC = () => {
-  const message = useMessage();
+const UserMessage: FC<{ message: ThreadMessageLike }> = ({ message }) => {
+  if (message?.role !== "user") return;
+  // Kiểm tra content[0] có phải object và có thuộc tính text
+  const firstContent = message?.content?.[0];
+  const text =
+    typeof firstContent === "object" && "text" in firstContent
+      ? firstContent.text
+      : "";
   return (
-    <MessagePrimitive.Root asChild>
-      <div
-        className="aui-user-message-root mx-auto grid w-full max-w-[var(--thread-max-width)] animate-in auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 px-2 py-4 duration-200 fade-in slide-in-from-bottom-1 first:mt-3 last:mb-5 [&:where(>*)]:col-start-2"
-        data-role="user"
-      >
-        {/*<UserMessageAttachments />*/}
-
-        <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
-          <div className="aui-user-message-content rounded-3xl bg-muted px-5 py-2.5 break-words text-foreground">
-            <MessagePrimitive.Parts />
-          </div>
-          <div className="aui-user-action-bar-wrapper absolute top-1/2 left-0 -translate-x-full -translate-y-1/2 pr-2">
-            <UserActionBar />
-          </div>
+    <div
+      className="aui-user-message-root mx-auto grid w-full max-w-[var(--thread-max-width)] animate-in auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] gap-y-2 px-2 py-4 duration-200 fade-in slide-in-from-bottom-1 first:mt-3 last:mb-5 [&:where(>*)]:col-start-2"
+      data-role="user"
+    >
+      {/*<UserMessageAttachments />*/}
+      <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
+        <div className="aui-user-message-content rounded-3xl bg-muted px-5 py-2.5 break-words text-foreground">
+          <p>{text}</p>
         </div>
-
-        <BranchPicker className="aui-user-branch-picker col-span-full col-start-1 row-start-3 -mr-1 justify-end" />
+        <div className="aui-user-action-bar-wrapper absolute top-1/2 left-0 -translate-x-full -translate-y-1/2 pr-2">
+          {/*<UserActionBar />*/}
+        </div>
       </div>
-    </MessagePrimitive.Root>
+      {/*<BranchPicker className="aui-user-branch-picker col-span-full col-start-1 row-start-3 -mr-1 justify-end" />*/}
+    </div>
   );
 };
 
