@@ -1,14 +1,11 @@
-import type { FC } from "react";
+import { FC } from "react";
 import {
   ThreadListItemPrimitive,
   ThreadListPrimitive,
 } from "@assistant-ui/react";
 import { ArchiveIcon, PlusIcon } from "lucide-react";
-import { last } from "lodash";
-
 import { Button } from "@/components/ui/button";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
-import { ChatThread, useChatStore } from "@/app/chatStore";
 
 export const ThreadList: FC = () => {
   return (
@@ -20,13 +17,12 @@ export const ThreadList: FC = () => {
 };
 
 const ThreadListNew: FC = () => {
-  const { addNewThread, setSelectedThreadId, threads } = useChatStore();
   return (
     <ThreadListPrimitive.New asChild>
       <Button
         className="aui-thread-list-new flex items-center justify-start gap-1 rounded-lg px-2.5 py-2 text-start hover:bg-muted data-active:bg-muted"
         variant="ghost"
-        onClick={() => {
+        /*onClick={() => {
           if (last(threads)?.messages?.length === 0) return;
           const newThreadName = `Thread ${threads.length + 1}`;
           addNewThread(newThreadName);
@@ -34,7 +30,7 @@ const ThreadListNew: FC = () => {
           if (newThread) {
             setSelectedThreadId(newThread.id);
           }
-        }}
+        }}*/
       >
         <PlusIcon />
         New Thread
@@ -44,32 +40,15 @@ const ThreadListNew: FC = () => {
 };
 
 const ThreadListItems: FC = () => {
-  const { threads } = useChatStore();
-  return threads?.map((ele) => {
-    const CustomThreadListItem: FC = () => <ThreadListItem thread={ele} />;
-
-    return (
-      <ThreadListPrimitive.Items
-        key={ele.id}
-        components={{ ThreadListItem: CustomThreadListItem }}
-      />
-    );
-  });
-  // return <ThreadListPrimitive.Items components={{ ThreadListItem }} />;
+  return <ThreadListPrimitive.Items components={{ ThreadListItem }} />;
 };
 
-const ThreadListItem: FC<{ thread: ChatThread }> = ({ thread }) => {
-  const { setSelectedThreadId } = useChatStore();
+const ThreadListItem: FC = () => {
   return (
     <ThreadListItemPrimitive.Root className="aui-thread-list-item flex items-center gap-2 rounded-lg transition-all hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none data-active:bg-muted">
-      <ThreadListItemPrimitive.Trigger
-        onClick={() => setSelectedThreadId(thread?.id)}
-        className="aui-thread-list-item-trigger flex-grow cursor-pointer px-3 py-2 text-start"
-      >
+      <ThreadListItemPrimitive.Trigger className="aui-thread-list-item-trigger flex-grow cursor-pointer px-3 py-2 text-start">
         <span className="aui-thread-list-item-title text-sm">
-          <ThreadListItemPrimitive.Title
-            fallback={thread?.name || "New Chat"}
-          />
+          <ThreadListItemPrimitive.Title fallback={"New Chat"} />
         </span>
         {/*<ThreadListItemTitle />*/}
       </ThreadListItemPrimitive.Trigger>

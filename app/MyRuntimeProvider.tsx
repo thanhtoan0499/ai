@@ -20,6 +20,7 @@ export function MyRuntimeProvider({
     setThreads,
     selectedThreadId,
     addNewThread,
+    setSelectedThreadId,
   } = useChatStore();
 
   const selectedThread = threads.find((t) => t.id === selectedThreadId)!;
@@ -88,6 +89,23 @@ export function MyRuntimeProvider({
         role: message.role,
         content: message?.content,
       };
+    },
+    adapters: {
+      threadList: {
+        threadId: selectedThreadId ?? threads[0]?.id ?? undefined,
+        threads: threads.map((t) => ({
+          id: t.id,
+          title: t.name,
+          status: "regular",
+        })),
+        onSwitchToThread: (threadId: string) => {
+          setSelectedThreadId(threadId);
+        },
+        onSwitchToNewThread: () => {
+          const newThreadName = `Thread ${threads.length + 1}`;
+          addNewThread(newThreadName);
+        },
+      },
     },
   });
 
