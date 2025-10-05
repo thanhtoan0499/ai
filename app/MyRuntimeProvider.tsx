@@ -40,39 +40,107 @@ export function MyRuntimeProvider({
       createdAt: new Date(),
     };
 
-    const nextMessages = [...selectedThread.messages, userMsg];
-    setThreadMessages(nextMessages);
+    const baseMessages = [...selectedThread.messages, userMsg];
+    setThreadMessages(baseMessages);
     setIsRunning(true);
 
+    const assistantId = `assistant-${Date.now()}`;
+    let assistantMsg: ThreadMessageLike = {
+      role: "assistant",
+      content: "",
+      id: assistantId,
+      createdAt: new Date(),
+    };
+
     try {
-      const fakeFetch = () =>
-        new Promise((resolve) => {
-          setTimeout(() => {
-            resolve({
-              text: message?.content,
-            });
-          }, 1000);
-        });
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: baseMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
 
-      const data = await fakeFetch();
+      if (!res.ok || !res.body) {
+        throw new Error(`Chat API error: ${res.status} ${res.statusText}`);
+      }
 
-      const assistantMsg: ThreadMessageLike = {
-        role: "assistant",
-        content: (data as any).text,
-        id: `assistant-${Date.now()}`,
-        createdAt: new Date(),
-      };
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
 
-      setThreadMessages([...nextMessages, assistantMsg]);
+      setThreadMessages([...baseMessages, assistantMsg]);
+
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (!chunk) continue;
+        buffer += chunk;
+
+        let newlineIndex = buffer.indexOf("\n");
+        while (newlineIndex !== -1) {
+          const line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          newlineIndex = buffer.indexOf("\n");
+
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          const colonIdx = trimmed.indexOf(":");
+          if (colonIdx === -1) {
+            continue; // malformed line
+          }
+          const type = trimmed.slice(0, colonIdx);
+          const payloadStr = trimmed.slice(colonIdx + 1);
+
+          let payload: any = null;
+          try {
+            payload = JSON.parse(payloadStr);
+          } catch (e) {
+            continue;
+          }
+
+          switch (type) {
+            case "0": {
+              // text delta
+              const delta = typeof payload === "string" ? payload : "";
+              if (delta) {
+                assistantMsg = {
+                  ...assistantMsg,
+                  content: `${assistantMsg.content}${delta}`,
+                };
+                setThreadMessages([...baseMessages, assistantMsg]);
+              }
+              break;
+            }
+            case "f": {
+              break;
+            }
+            case "e": {
+              break;
+            }
+            case "d": {
+              break;
+            }
+            default: {
+              break;
+            }
+          }
+        }
+      }
     } catch (err) {
       console.error("Chat request error:", err);
-      const assistantMsg: ThreadMessageLike = {
+      assistantMsg = {
         role: "assistant",
         content: "Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.",
-        id: `assistant-${Date.now()}`,
+        id: assistantId,
         createdAt: new Date(),
       };
-      setThreadMessages([...nextMessages, assistantMsg]);
+      setThreadMessages([...baseMessages, assistantMsg]);
     } finally {
       setIsRunning(false);
     }

@@ -1,11 +1,9 @@
 import {
   ActionBarPrimitive,
-  AssistantRuntimeProvider,
   BranchPickerPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
-  ThreadMessageLike,
   ThreadPrimitive,
   useComposerRuntime,
 } from "@assistant-ui/react";
@@ -31,69 +29,41 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import * as m from "motion/react-m";
-import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
 import { useChatStore } from "@/app/chatStore";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
 
 export const Thread: FC = () => {
-  const { threads, setThreads, selectedThreadId } = useChatStore();
+  const { threads, selectedThreadId } = useChatStore();
   const selectedThread = threads.find((t) => t.id === selectedThreadId);
-  const messages = selectedThread ? selectedThread.messages : [];
-
-  const runtime = useDataStreamRuntime({
-    api: "/api/chat",
-    onResponse: (res) => {
-      console.log("onResponse", res);
-    },
-    onFinish: (res) => {
-      const setThreadMessages = (msgs: ThreadMessageLike[]) => {
-        setThreads(
-          threads.map((t) =>
-            t.id === selectedThreadId ? { ...t, messages: msgs } : t,
-          ),
-        );
-      };
-      const assistantMsg: ThreadMessageLike = {
-        role: "assistant",
-        content: res?.content,
-        id: `assistant-${Date.now()}`,
-        createdAt: new Date(),
-      };
-      setThreadMessages([...messages, assistantMsg]);
-    },
-    onError: (err) => console.error("Runtime error:", err),
-  });
 
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <LazyMotion features={domAnimation}>
-        <MotionConfig reducedMotion="user">
-          <ThreadPrimitive.Root
-            className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
-            style={{
-              ["--thread-max-width" as string]: "44rem",
-            }}
-          >
-            <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
-              {selectedThread?.messages?.length === 0 && <ThreadWelcome />}
+    <LazyMotion features={domAnimation}>
+      <MotionConfig reducedMotion="user">
+        <ThreadPrimitive.Root
+          className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
+          style={{
+            ["--thread-max-width" as string]: "44rem",
+          }}
+        >
+          <ThreadPrimitive.Viewport className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll px-4">
+            {selectedThread?.messages?.length === 0 && <ThreadWelcome />}
 
-              <ThreadPrimitive.Messages
-                components={{
-                  UserMessage,
-                  EditComposer,
-                  AssistantMessage,
-                }}
-              />
-              <ThreadPrimitive.If empty={false}>
-                <div className="aui-thread-viewport-spacer min-h-8 grow" />
-              </ThreadPrimitive.If>
-              <Composer />
-            </ThreadPrimitive.Viewport>
-          </ThreadPrimitive.Root>
-        </MotionConfig>
-      </LazyMotion>
-    </AssistantRuntimeProvider>
+            <ThreadPrimitive.Messages
+              components={{
+                UserMessage,
+                EditComposer,
+                AssistantMessage,
+              }}
+            />
+            <ThreadPrimitive.If empty={false}>
+              <div className="aui-thread-viewport-spacer min-h-8 grow" />
+            </ThreadPrimitive.If>
+            <Composer />
+          </ThreadPrimitive.Viewport>
+        </ThreadPrimitive.Root>
+      </MotionConfig>
+    </LazyMotion>
   );
 };
 
@@ -193,42 +163,13 @@ const ThreadWelcomeSuggestions: FC = () => {
 };
 
 const Composer: FC = () => {
-  const composer = useComposerRuntime();
-  const { threads, setThreads, selectedThreadId } = useChatStore();
-  const selectedThread = threads.find((t) => t.id === selectedThreadId);
-  const messages = selectedThread ? selectedThread.messages : [];
-
-  const handleSend = () => {
-    const composerState = composer.getState();
-    const currentText = composerState.text;
-
-    const setThreadMessages = (msgs: ThreadMessageLike[]) => {
-      setThreads(
-        threads.map((t) =>
-          t.id === selectedThreadId ? { ...t, messages: msgs } : t,
-        ),
-      );
-    };
-    const userMsg: ThreadMessageLike = {
-      role: "user",
-      content: currentText,
-      id: `user-${Date.now()}`,
-      createdAt: new Date(),
-    };
-    setThreadMessages([...messages, userMsg]);
-  };
   return (
     <div className="aui-composer-wrapper sticky bottom-0 mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col gap-4 overflow-visible rounded-t-3xl bg-background pb-4 md:pb-6">
       <ThreadScrollToBottom />
       <ThreadPrimitive.Empty>
         <ThreadWelcomeSuggestions />
       </ThreadPrimitive.Empty>
-      <ComposerPrimitive.Root
-        onSubmit={() => {
-          handleSend();
-        }}
-        className="aui-composer-root relative flex w-full flex-col rounded-3xl border border-border bg-muted px-1 pt-2 shadow-[0_9px_9px_0px_rgba(0,0,0,0.01),0_2px_5px_0px_rgba(0,0,0,0.06)] dark:border-muted-foreground/15"
-      >
+      <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col rounded-3xl border border-border bg-muted px-1 pt-2 shadow-[0_9px_9px_0px_rgba(0,0,0,0.01),0_2px_5px_0px_rgba(0,0,0,0.06)] dark:border-muted-foreground/15">
         <ComposerAttachments />
         <ComposerPrimitive.Input
           placeholder="Send a message..."
@@ -249,11 +190,10 @@ const ComposerAction: FC = () => {
       <ComposerAddAttachment />
 
       <ThreadPrimitive.If running={false}>
-        {/*<ComposerPrimitive.Send asChild>*/}
         <TooltipIconButton
           tooltip="Send message"
           side="bottom"
-          // type="submit"
+          type="submit"
           variant="default"
           size="icon"
           className="aui-composer-send size-[34px] rounded-full p-1"
@@ -261,7 +201,6 @@ const ComposerAction: FC = () => {
         >
           <ArrowUpIcon className="aui-composer-send-icon size-5" />
         </TooltipIconButton>
-        {/*</ComposerPrimitive.Send>*/}
       </ThreadPrimitive.If>
 
       <ThreadPrimitive.If running>
