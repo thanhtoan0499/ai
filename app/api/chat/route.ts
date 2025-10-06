@@ -1,32 +1,10 @@
 import { NextResponse } from "next/server";
+import { deltas } from "@/app/api/chat/data";
 
-// Ensure this route is always dynamic so the stream isn't cached by Next.js
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export async function POST() {
   const messageId = "123123123";
-  const deltas = [
-    "Gets",
-    " the",
-    " element",
-    " at",
-    " index",
-    " n",
-    " of",
-    " array.",
-    " If",
-    " n",
-    " is",
-    " negative,",
-    " the",
-    " nth",
-    " element",
-    " from",
-    " the",
-    " end",
-    " is",
-    " returned.",
-  ];
 
   const stream = new ReadableStream({
     async start(controller) {

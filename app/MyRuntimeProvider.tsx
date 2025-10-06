@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useChatStore } from "@/app/chatStore";
+import { ChatThread, useChatStore } from "@/app/chatStore";
 import {
   AppendMessage,
   AssistantRuntimeProvider,
+  ExternalStoreThreadData,
+  ExternalStoreThreadListAdapter,
   ThreadMessageLike,
-  useExternalStoreRuntime,
+  useExternalStoreRuntime
 } from "@assistant-ui/react";
 import { DevToolsModal } from "@assistant-ui/react-devtools";
+import { last } from "lodash";
 
 export function MyRuntimeProvider({
   children,
@@ -22,8 +25,7 @@ export function MyRuntimeProvider({
     addNewThread,
     setSelectedThreadId,
   } = useChatStore();
-
-  const selectedThread = threads.find((t) => t.id === selectedThreadId)!;
+  const selectedThread = threads.find((t) => t.id === selectedThreadId);
   const setThreadMessages = (msgs: ThreadMessageLike[]) => {
     setThreads(
       threads.map((t) =>
@@ -40,7 +42,7 @@ export function MyRuntimeProvider({
       createdAt: new Date(),
     };
 
-    const baseMessages = [...selectedThread.messages, userMsg];
+    const baseMessages = [...(selectedThread?.messages ?? []), userMsg];
     setThreadMessages(baseMessages);
     setIsRunning(true);
 
@@ -97,7 +99,7 @@ export function MyRuntimeProvider({
           const type = trimmed.slice(0, colonIdx);
           const payloadStr = trimmed.slice(colonIdx + 1);
 
-          let payload: any = null;
+          let payload = null;
           try {
             payload = JSON.parse(payloadStr);
           } catch (e) {
@@ -146,10 +148,73 @@ export function MyRuntimeProvider({
     }
   };
 
+  const threadListAdapter: ExternalStoreThreadListAdapter = {
+    // threadId: selectedThreadId ?? threads[0]?.id ?? undefined,
+    threads: (
+      threads.filter(
+        (t) => t.status === "regular",
+      ) as ExternalStoreThreadData<"regular">[]
+    ).map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: "regular",
+    })),
+    archivedThreads: threads.filter(
+      (t) => t.status === "archived",
+    ) as ExternalStoreThreadData<"archived">[],
+    onArchive: (threadId) => {
+      if (threads?.find((ele) => ele.id === threadId)?.messages?.length === 0)
+        return;
+      const updatedThreads = threads.map((t) =>
+        t.id === threadId ? { ...t, status: "archived" } : t,
+      );
+      setThreads(updatedThreads as ChatThread[]);
+      setSelectedThreadId(
+        threads?.find((ele) => ele.status !== "archived")?.id ?? "",
+      );
+      if (!updatedThreads?.some((ele) => ele.status !== "archived")) {
+        const newThreadName = `Thread ${threads.length + 1}`;
+        addNewThread(newThreadName);
+      }
+    },
+    onSwitchToNewThread: () => {
+      if (
+        last(threads)?.messages?.length === 0 &&
+        last(threads)?.status !== "archived"
+      )
+        return;
+      const newThreadName = `Thread ${threads.length + 1}`;
+      addNewThread(newThreadName);
+    },
+    onSwitchToThread: (threadId: string) => {
+      setSelectedThreadId(threadId);
+    },
+    /*onRename: (threadId, newTitle) => {
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.threadId === threadId ? { ...t, title: newTitle } : t,
+        ),
+      );
+    },
+
+    onDelete: (threadId) => {
+      setThreads((prev) => prev.filter((t) => t.threadId !== threadId));
+      setThreads((prev) => {
+        const next = new Map(prev);
+        next.delete(threadId);
+        return next;
+      });
+      if (selectedThreadId === threadId) {
+        setSelectedThreadId("default");
+      }
+    },*/
+  };
+
   const runtime = useExternalStoreRuntime({
     messages: selectedThread?.messages ?? [],
-    setMessages: (msgs: readonly ThreadMessageLike[]) =>
-      setThreadMessages([...(msgs ?? [])]),
+    setMessages: (msgs: readonly ThreadMessageLike[]) => {
+      setThreadMessages([...(msgs ?? [])]);
+    },
     isRunning,
     onNew,
     convertMessage: (message): ThreadMessageLike => {
@@ -159,21 +224,7 @@ export function MyRuntimeProvider({
       };
     },
     adapters: {
-      threadList: {
-        threadId: selectedThreadId ?? threads[0]?.id ?? undefined,
-        threads: threads.map((t) => ({
-          id: t.id,
-          title: t.name,
-          status: "regular",
-        })),
-        onSwitchToThread: (threadId: string) => {
-          setSelectedThreadId(threadId);
-        },
-        onSwitchToNewThread: () => {
-          const newThreadName = `Thread ${threads.length + 1}`;
-          addNewThread(newThreadName);
-        },
-      },
+      threadList: threadListAdapter,
     },
   });
 
@@ -183,6 +234,9 @@ export function MyRuntimeProvider({
     const newThreadName = `Thread ${threads.length + 1}`;
     addNewThread(newThreadName);
   }, []);
+
+  console.log("Selected thread ID:", selectedThreadId);
+  console.log("Threads", threads);
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>

@@ -5,8 +5,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 export type ChatThread = {
   id: string;
-  name: string;
+  title: string;
   messages: ThreadMessageLike[];
+  status: "regular" | "archived";
 };
 
 interface ChatState {
@@ -31,9 +32,10 @@ export const useChatStore = create<ChatState>()(
       addNewThread: (name) => {
         const newThread = {
           id: `thread-${Date.now()}`,
-          name,
+          title: name,
           messages: [],
-        };
+          status: "regular",
+        } as ChatThread;
         set({
           threads: [...get().threads, newThread],
           selectedThreadId: newThread.id,
