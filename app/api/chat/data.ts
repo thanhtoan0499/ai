@@ -1,4 +1,4 @@
-export const deltas = [
+const baseDeltas = [
   "Dư",
   "ới",
   " đây l\u00e0 **b",
@@ -64,4 +64,78 @@ export const deltas = [
   "**.\n\n---\n\nB\u1ea1n c\u00f3 mu\u1ed1n m\u00ecnh v\u1ebd **s\u01a1 \u0111\u1ed3 minh ho\u1ea1",
   " lu\u1ed3ng d\u1eef li\u1ec7u** gi\u1eefa 2 runtime n\u00e0y (Local vs External) \u0111\u1ec3",
   " d\u1ec5 hi\u1ec3u h\u01a1n kh\u00f4ng?",
+];
+
+// Chart config to be streamed inside a text delta (sentinel [[CHART]]:)
+const chartConfig = {
+  type: "line" as const,
+  data: {
+    labels: [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ],
+    datasets: [
+      {
+        label: "Revenue",
+        data: [12, 19, 15, 22, 28, 33, 31, 29, 35, 42, 40, 45],
+        borderColor: "rgb(59, 130, 246)", // tailwind blue-500
+        backgroundColor: "rgba(59, 130, 246, 0.35)",
+        tension: 0.3,
+        pointRadius: 3,
+        fill: false,
+      },
+      {
+        label: "Cost",
+        data: [8, 12, 10, 14, 18, 20, 19, 17, 22, 26, 24, 28],
+        borderColor: "rgb(244, 63, 94)", // tailwind rose-500
+        backgroundColor: "rgba(244, 63, 94, 0.3)",
+        tension: 0.3,
+        pointRadius: 3,
+        fill: false,
+      },
+    ],
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {
+        display: true,
+        position: "top" as const,
+        labels: { usePointStyle: true },
+      },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+      },
+    },
+    interaction: {
+      mode: "nearest" as const,
+      axis: "x" as const,
+      intersect: false,
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: "rgba(0,0,0,0.05)" },
+      },
+    },
+  },
+} as const;
+
+export const deltas = [
+  ...baseDeltas,
+  `[[CHART]]:${JSON.stringify(chartConfig)}`,
 ];

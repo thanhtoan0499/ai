@@ -8,7 +8,7 @@ import {
   ExternalStoreThreadData,
   ExternalStoreThreadListAdapter,
   ThreadMessageLike,
-  useExternalStoreRuntime
+  useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { DevToolsModal } from "@assistant-ui/react-devtools";
 import { last } from "lodash";
@@ -103,14 +103,37 @@ export function MyRuntimeProvider({
           try {
             payload = JSON.parse(payloadStr);
           } catch (e) {
+            console.log(e);
             continue;
           }
 
           switch (type) {
             case "0": {
-              // text delta
+              // text delta (may contain special chart sentinel)
               const delta = typeof payload === "string" ? payload : "";
-              if (delta) {
+              if (!delta) break;
+
+              const CHART_SENTINEL = "[[CHART]]:";
+              if (delta.startsWith(CHART_SENTINEL)) {
+                const jsonStr = delta.slice(CHART_SENTINEL.length);
+                try {
+                  const chartConfig = JSON.parse(jsonStr);
+                  assistantMsg = {
+                    ...assistantMsg,
+                    // do not append sentinel to visible content
+                    metadata: {
+                      ...assistantMsg.metadata,
+                      custom: {
+                        ...assistantMsg.metadata?.custom,
+                        chart: chartConfig,
+                      },
+                    },
+                  } as ThreadMessageLike;
+                  setThreadMessages([...baseMessages, assistantMsg]);
+                } catch (e) {
+                  console.log(e);
+                }
+              } else {
                 assistantMsg = {
                   ...assistantMsg,
                   content: `${assistantMsg.content}${delta}`,
@@ -221,7 +244,11 @@ export function MyRuntimeProvider({
       return {
         role: message.role,
         content: message?.content,
-      };
+        id: message.id,
+        createdAt: message.createdAt,
+        attachments: message.attachments,
+        metadata: message.metadata,
+      } as ThreadMessageLike;
     },
     adapters: {
       threadList: threadListAdapter,

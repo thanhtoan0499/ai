@@ -5,7 +5,7 @@ import {
   ErrorPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-  useComposerRuntime,
+  useMessage
 } from "@assistant-ui/react";
 import {
   ArrowDownIcon,
@@ -16,14 +16,11 @@ import {
   CopyIcon,
   PencilIcon,
   RefreshCwIcon,
-  Square,
+  Square
 } from "lucide-react";
 import React, { FC } from "react";
 
-import {
-  ComposerAddAttachment,
-  ComposerAttachments,
-} from "@/components/assistant-ui/attachment";
+import { ComposerAddAttachment, ComposerAttachments } from "@/components/assistant-ui/attachment";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -32,6 +29,8 @@ import * as m from "motion/react-m";
 import { useChatStore } from "@/app/chatStore";
 import { ToolFallback } from "@/components/assistant-ui/tool-fallback";
 import { MarkdownText } from "@/components/assistant-ui/markdown-text";
+import Chart from "chart.js/auto";
+import type { Chart as ChartJS } from "chart.js";
 
 export const Thread: FC = () => {
   const { threads, selectedThreadId } = useChatStore();
@@ -231,6 +230,38 @@ const MessageError: FC = () => {
 };
 
 const AssistantMessage: FC = () => {
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const chartRef = React.useRef<ChartJS | null>(null);
+  const chartMeta = useMessage((s) => s.metadata?.custom?.chart as any);
+
+  React.useEffect(() => {
+    // Clean up any existing chart first
+    if (chartRef.current) {
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+
+    if (!chartMeta) return; // no chart to render
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    if (!ctx) return;
+
+    chartRef.current = new Chart(ctx, {
+      type: chartMeta?.type ?? "line",
+      data: chartMeta?.data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        ...chartMeta?.options,
+      },
+    });
+
+    return () => {
+      chartRef.current?.destroy();
+      chartRef.current = null;
+    };
+  }, [chartMeta]);
+
   return (
     <MessagePrimitive.Root asChild>
       <div
@@ -244,6 +275,18 @@ const AssistantMessage: FC = () => {
               tools: { Fallback: ToolFallback },
             }}
           />
+
+          {chartMeta && (
+            <div className="aui-assistant-line-chart my-4 rounded-xl border border-border bg-muted/30 p-3">
+              <div className="mb-2 text-sm text-muted-foreground">
+                Biểu đồ đường (Chart.js)
+              </div>
+              <div className="h-64">
+                <canvas ref={canvasRef} />
+              </div>
+            </div>
+          )}
+
           <MessageError />
         </div>
 
