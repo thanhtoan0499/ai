@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { ChatThread, useChatStore } from "@/app/chatStore";
 import {
   AppendMessage,
@@ -8,14 +8,17 @@ import {
   ExternalStoreThreadData,
   ExternalStoreThreadListAdapter,
   ThreadMessageLike,
-  useExternalStoreRuntime,
+  useExternalStoreRuntime
 } from "@assistant-ui/react";
 import { DevToolsModal } from "@assistant-ui/react-devtools";
 import { last } from "lodash";
+import { experimental_streamedQuery as streamedQuery, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export function MyRuntimeProvider({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const queryClientRef = useRef<QueryClient | null>(null);
+  queryClientRef.current ??= new QueryClient();
   const {
     isRunning,
     setIsRunning,
@@ -55,108 +58,124 @@ export function MyRuntimeProvider({
     };
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: baseMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      if (!res.ok || !res.body) {
-        throw new Error(`Chat API error: ${res.status} ${res.statusText}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
+      // Ensure the assistant message is visible before streaming
       setThreadMessages([...baseMessages, assistantMsg]);
 
-      let buffer = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        if (!chunk) continue;
-        buffer += chunk;
+      const queryKey = ["chat", selectedThreadId, assistantId] as const;
 
-        let newlineIndex = buffer.indexOf("\n");
-        while (newlineIndex !== -1) {
-          const line = buffer.slice(0, newlineIndex);
-          buffer = buffer.slice(newlineIndex + 1);
-          newlineIndex = buffer.indexOf("\n");
+      type StreamChunk = { delta?: string; chart?: string };
 
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          const colonIdx = trimmed.indexOf(":");
-          if (colonIdx === -1) {
-            continue; // malformed line
-          }
-          const type = trimmed.slice(0, colonIdx);
-          const payloadStr = trimmed.slice(colonIdx + 1);
-
-          let payload = null;
-          try {
-            payload = JSON.parse(payloadStr);
-          } catch (e) {
-            console.log(e);
-            continue;
-          }
-
-          switch (type) {
-            case "0": {
-              // text delta (may contain special chart sentinel)
-              const delta = typeof payload === "string" ? payload : "";
-              if (!delta) break;
-
-              const CHART_SENTINEL = "[[CHART]]:";
-              if (delta.startsWith(CHART_SENTINEL)) {
-                const jsonStr = delta.slice(CHART_SENTINEL.length);
-                try {
-                  const chartConfig = JSON.parse(jsonStr);
-                  assistantMsg = {
-                    ...assistantMsg,
-                    // do not append sentinel to visible content
-                    metadata: {
-                      ...assistantMsg.metadata,
-                      custom: {
-                        ...assistantMsg.metadata?.custom,
-                        chart: chartConfig,
-                      },
+      // Use TanStack Query streamedQuery to handle the ReadableStream
+      await queryClientRef.current!.fetchQuery({
+        queryKey,
+        queryFn: streamedQuery<StreamChunk, ThreadMessageLike, typeof queryKey>(
+          {
+            initialValue: assistantMsg,
+            // Update our chat store on every chunk via reducer side-effect
+            reducer: (prevMsg, chunk) => {
+              let nextMsg = prevMsg;
+              if (chunk.chart) {
+                nextMsg = {
+                  ...nextMsg,
+                  metadata: {
+                    ...nextMsg.metadata,
+                    custom: {
+                      ...nextMsg.metadata?.custom,
+                      chart: chunk.chart,
                     },
-                  } as ThreadMessageLike;
-                  setThreadMessages([...baseMessages, assistantMsg]);
-                } catch (e) {
-                  console.log(e);
-                }
-              } else {
-                assistantMsg = {
-                  ...assistantMsg,
-                  content: `${assistantMsg.content}${delta}`,
-                };
-                setThreadMessages([...baseMessages, assistantMsg]);
+                  },
+                } as ThreadMessageLike;
               }
-              break;
-            }
-            case "f": {
-              break;
-            }
-            case "e": {
-              break;
-            }
-            case "d": {
-              break;
-            }
-            default: {
-              break;
-            }
-          }
-        }
-      }
+              if (chunk.delta) {
+                nextMsg = {
+                  ...nextMsg,
+                  content: `${nextMsg.content}${chunk.delta}`,
+                } as ThreadMessageLike;
+              }
+              setThreadMessages([...baseMessages, nextMsg]);
+              return nextMsg;
+            },
+            async streamFn() {
+              const res = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  messages: baseMessages.map((m) => ({
+                    role: m.role,
+                    content: m.content,
+                  })),
+                }),
+              });
+
+              if (!res.ok || !res.body) {
+                throw new Error(
+                  `Chat API error: ${res.status} ${res.statusText}`,
+                );
+              }
+
+              const reader = res.body.getReader();
+              const decoder = new TextDecoder();
+
+              async function* iterator(): AsyncIterable<StreamChunk> {
+                let buffer = "";
+                while (true) {
+                  const { value, done } = await reader.read();
+                  if (done) break;
+                  const chunkStr = decoder.decode(value, { stream: true });
+                  if (!chunkStr) continue;
+                  buffer += chunkStr;
+
+                  let newlineIndex = buffer.indexOf("\n");
+                  while (newlineIndex !== -1) {
+                    const line = buffer.slice(0, newlineIndex);
+                    buffer = buffer.slice(newlineIndex + 1);
+                    newlineIndex = buffer.indexOf("\n");
+
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+
+                    const colonIdx = trimmed.indexOf(":");
+                    if (colonIdx === -1) {
+                      continue; // malformed line
+                    }
+                    const type = trimmed.slice(0, colonIdx);
+                    const payloadStr = trimmed.slice(colonIdx + 1);
+
+                    let payload = null;
+                    try {
+                      payload = JSON.parse(payloadStr);
+                    } catch {
+                      continue;
+                    }
+
+                    if (type === "0") {
+                      const delta = typeof payload === "string" ? payload : "";
+                      if (!delta) continue;
+
+                      const CHART_SENTINEL = "[[CHART]]:";
+                      if (delta.startsWith(CHART_SENTINEL)) {
+                        const jsonStr = delta.slice(CHART_SENTINEL.length);
+                        try {
+                          const chartConfig = JSON.parse(jsonStr);
+                          yield { chart: chartConfig } as StreamChunk;
+                        } catch {
+                          // ignore bad chart JSON
+                        }
+                      } else {
+                        yield { delta } as StreamChunk;
+                      }
+                    }
+                  }
+                }
+              }
+
+              return iterator();
+            },
+          },
+        ),
+        staleTime: 0,
+        gcTime: 5 * 60 * 1000,
+      });
     } catch (err) {
       console.error("Chat request error:", err);
       assistantMsg = {
@@ -262,13 +281,12 @@ export function MyRuntimeProvider({
     addNewThread(newThreadName);
   }, []);
 
-  console.log("Selected thread ID:", selectedThreadId);
-  console.log("Threads", threads);
-
   return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <DevToolsModal />
-      {children}
-    </AssistantRuntimeProvider>
+    <QueryClientProvider client={queryClientRef.current}>
+      <AssistantRuntimeProvider runtime={runtime}>
+        <DevToolsModal />
+        {children}
+      </AssistantRuntimeProvider>
+    </QueryClientProvider>
   );
 }
